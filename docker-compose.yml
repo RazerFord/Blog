@@ -1,0 +1,75 @@
+version: '3.9'
+services:
+
+  php-fpm:
+    build:
+      context: docker/php-fpm
+    volumes:
+      - ./:/var/www
+    environment:
+      XDEBUG_CONFIG: "remote_host=192.168.220.1 remote_enable=1"
+      PHP_IDE_CONFIG: "serverName=Docker"
+    depends_on:
+      - database
+    networks:
+      - internal
+
+  nginx:
+    build:
+      context: docker/nginx
+    volumes:
+      - ./:/var/www/
+      - ./storage/app/public/:/var/www/public/storage/
+    ports:
+      - 8080:81
+    depends_on:
+      - php-fpm
+    networks:
+      - internal
+      
+  composer:
+    build:
+      context: ./
+      dockerfile: docker/composer/Dockerfile
+    volumes:
+      - ./:/comp
+    tty: true
+    depends_on:
+      - php-fpm
+    command: composer install
+
+  database:
+    container_name: pgsql1-database
+    image: postgres:13.3
+    environment:
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_DATABASE}
+    volumes:
+      - ./docker/pgsql:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - internal
+    restart: unless-stopped
+      
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - ./.pgadmin:/root/.pgadmin
+    depends_on:
+      - database
+    ports:
+      - ${PGADMIN_PORT:-5050}:80
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+  internal:
+    driver: bridge
